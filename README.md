@@ -1,7 +1,7 @@
 <<<<<<< HEAD
 # 💰 SpendWise
 
-App full-stack de controlo de despesas pessoais — projeto de portfolio.
+App full-stack de controlo de despesas pessoais — projeto de portfólio.
 
 **Stack:** Python · FastAPI · PostgreSQL · React · TypeScript
 
@@ -123,18 +123,18 @@ No Swagger (`/docs`), experimenta por esta ordem:
 
 ## 👤 Autor
 
-[O teu nome] · [LinkedIn] · [GitHub]
+Filipe Ferreira · LinkedIn : https://www.linkedin.com/in/filipe-ferreira-67972b35a
 =======
 Spendrax
 
-A full-stack personal finance application that helps users track income and expenses, set budgets and savings goals, and manage their money with the help of an AI assistant. Users can type transactions in plain language and an LLM interprets them, creating the right entries automatically.
+A full-stack personal finance application that helps users track income and expenses, set budgets and savings goals, and manage their money with the help of an AI assistant. Users can type transactions in plain language, and an LLM interprets them, creating the right entries automatically.
 
 Features
 
 
-Dashboard with monthly income, expenses and balance at a glance
+Dashboard with monthly income, expenses, and balance at a glance
 Transactions — full CRUD, scoped per user, with monthly summaries
-Recurring transactions — define fixed income/expenses (e.g. salary, rent) that are created automatically each month
+Recurring transactions — define fixed income/expenses (e.g. salary, rent) that are created each month automatically
 AI chatbot (LLaMA 3.3 via Groq) — interprets natural-language input ("I got paid 1000€ today") and creates transactions, including recurrence detection
 Budgets and savings goals with progress tracking
 CSV export of transaction history
