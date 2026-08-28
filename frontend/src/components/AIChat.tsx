@@ -20,8 +20,6 @@ interface ParsedTransaction {
   is_recurring: boolean
 }
 
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
-
 export default function AIChat({ categories, onTransactionAdded }: AIChatProps) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -29,49 +27,9 @@ export default function AIChat({ categories, onTransactionAdded }: AIChatProps) 
   const [error, setError] = useState('')
   const [confirmed, setConfirmed] = useState(false)
 
-  const parseWithGroq = async (text: string): Promise<ParsedTransaction> => {
-    const categoryNames = categories.map(c => c.name).join(', ')
-
-    const prompt = `Analisa este texto e extrai informação de uma transação financeira.
-Texto: "${text}"
-
-Categorias disponíveis: ${categoryNames}
-
-Responde APENAS com um JSON válido, sem texto extra, sem markdown, sem backticks:
-{
-  "description": "descrição curta da transação",
-  "amount": valor_numerico_positivo,
-  "type": "expense" ou "income",
-  "category_name": "uma das categorias disponíveis ou a mais próxima",
-  "is_recurring": true ou false
-}
-
-Regras:
-- type é "income" se for salário, receita, ganho, reembolso
-- type é "expense" para tudo o resto
-- amount é sempre positivo
-- description deve ser clara e curta
-- category_name deve ser exatamente uma das categorias disponíveis
-- is_recurring é APENAS true se o texto mencionar EXPLICITAMENTE "todos os meses", "mensalmente", "todo o mês", "sempre", "fixo mensal", "mensal", "recorrente", "cada mês". Se não mencionar nada disso, is_recurring é SEMPRE false.`
-
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROQ_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.1,
-        max_tokens: 200,
-      })
-    })
-
-    const data = await response.json()
-    const rawText = data.choices[0].message.content.trim()
-    const cleaned = rawText.replace(/```json|```/g, '').trim()
-    return JSON.parse(cleaned)
+  const parseWithAI = async (text: string): Promise<ParsedTransaction> => {
+    const res = await api.post('/ai/parse', { text })
+    return res.data
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -83,10 +41,17 @@ Regras:
     setConfirmed(false)
 
     try {
-      const parsed = await parseWithGroq(input)
+      const parsed = await parseWithAI(input)
       setResult(parsed)
-    } catch {
-      setError('Não consegui interpretar. Tenta ser mais específico, ex: "almoço 12€" ou "salário 800 euros todo o mês"')
+    } catch (err: any) {
+      const status = err.response?.status
+      if (status === 429) {
+        setError(err.response.data.detail)
+      } else if (status === 504) {
+        setError('O serviço de IA demorou demasiado. Tenta outra vez.')
+      } else {
+        setError('Não consegui interpretar. Tenta ser mais específico, ex: "almoço 12€" ou "salário 800 euros todo o mês"')
+      }
     } finally {
       setLoading(false)
     }
@@ -204,36 +169,36 @@ Regras:
             </div>
           </div>
 
-           {/* Toggle recorrente — só aparece se a IA detetou como recorrente, ou o utilizador pode ativar */}
-        <div className="flex items-center justify-between bg-gray-700 rounded-lg px-3 py-2">
-          <div>
-            <p className="text-sm font-medium">
-              {result.is_recurring ? '🔄 Transação recorrente' : 'Marcar como recorrente?'}
-            </p>
-            <p className="text-xs text-gray-400">
-              {result.is_recurring ? 'Repete todos os meses' : 'Ativa se se repetir mensalmente'}
-            </p>
+          {/* Toggle recorrente */}
+          <div className="flex items-center justify-between bg-gray-700 rounded-lg px-3 py-2">
+            <div>
+              <p className="text-sm font-medium">
+                {result.is_recurring ? '🔄 Transação recorrente' : 'Marcar como recorrente?'}
+              </p>
+              <p className="text-xs text-gray-400">
+                {result.is_recurring ? 'Repete todos os meses' : 'Ativa se se repetir mensalmente'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleEdit('is_recurring', !result.is_recurring)}
+              className={`w-12 h-6 rounded-full transition-colors relative ${
+                result.is_recurring ? 'bg-emerald-500' : 'bg-gray-600'
+              }`}
+            >
+              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all ${
+                result.is_recurring ? 'left-6' : 'left-0.5'
+              }`} />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => handleEdit('is_recurring', !result.is_recurring)}
-            className={`w-12 h-6 rounded-full transition-colors relative ${
-              result.is_recurring ? 'bg-emerald-500' : 'bg-gray-600'
-            }`}
-          >
-            <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all ${
-              result.is_recurring ? 'left-6' : 'left-0.5'
-            }`} />
-          </button>
-        </div>
 
-        {result.is_recurring && (
-          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
-            <p className="text-xs text-emerald-400">
-              🔄 Ficará disponível na página de Recorrentes para adicionar automaticamente todos os meses.
-            </p>
-          </div>
-        )}
+          {result.is_recurring && (
+            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
+              <p className="text-xs text-emerald-400">
+                🔄 Ficará disponível na página de Recorrentes para adicionar automaticamente todos os meses.
+              </p>
+            </div>
+          )}
 
           <div className="flex gap-3 pt-2">
             <button

@@ -50,8 +50,6 @@ const MONTHS_FULL = [
 type RangeOption = '1S' | '1M' | '3M' | '6M' | 'YTD' | 'MAX' | 'COMPARE'
 type PredictionPeriod = '1M' | '3M' | '6M' | '1A'
 
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
-
 export default function Report() {
   const navigate = useNavigate()
   const now = new Date()
@@ -76,19 +74,19 @@ export default function Report() {
         api.get('/transactions/list/recurring')
       ])
 
-  const dataMap = new Map<string, Summary>(
-      rangeRes.data.map((s: Summary) => [`${s.year}-${s.month}`, s] as [string, Summary])
+      const dataMap = new Map<string, Summary>(
+        rangeRes.data.map((s: Summary) => [`${s.year}-${s.month}`, s] as [string, Summary])
       )
 
-  const fullSummaries: Summary[] = []
-    for (let i = 23; i >= 0; i--) {
-  let m = currentMonth - i
-  let y = currentYear
-  while (m <= 0) { m += 12; y -= 1 }
-  const key = `${y}-${m}`
-  const found = dataMap.get(key)
-  fullSummaries.push(found !== undefined ? found : { month: m, year: y, income: 0, expenses: 0, balance: 0 })
-}
+      const fullSummaries: Summary[] = []
+      for (let i = 23; i >= 0; i--) {
+        let m = currentMonth - i
+        let y = currentYear
+        while (m <= 0) { m += 12; y -= 1 }
+        const key = `${y}-${m}`
+        const found = dataMap.get(key)
+        fullSummaries.push(found !== undefined ? found : { month: m, year: y, income: 0, expenses: 0, balance: 0 })
+      }
 
       setAllSummaries(fullSummaries)
       setRecurringTransactions(recurringRes.data)
@@ -154,128 +152,23 @@ export default function Report() {
     .filter(t => t.type === 'expense')
     .reduce((sum, t) => sum + t.amount, 0)
 
-  const periodMonths = { '1M': 1, '3M': 3, '6M': 6, '1A': 12 }
-
   const handlePredict = async () => {
     setPredictionLoading(true)
     setPredictionError('')
     setPrediction(null)
 
     try {
-      const recentSummaries = allSummaries.filter(s => s.income > 0 || s.expenses > 0).slice(-6)
-
-      if (recentSummaries.length === 0) {
-        setPredictionError('Não há dados suficientes. Adiciona algumas transações primeiro.')
-        return
+      const res = await api.post('/ai/report', { period: predictionPeriod })
+      setPrediction(res.data)
+    } catch (err: any) {
+      const status = err.response?.status
+      if (status === 429 || status === 400) {
+        setPredictionError(err.response.data.detail)
+      } else if (status === 504) {
+        setPredictionError('A análise demorou demasiado tempo. Tenta novamente.')
+      } else {
+        setPredictionError('Erro ao gerar previsão. Tenta novamente.')
       }
-
-      const avgIncome = recentSummaries.reduce((s, m) => s + m.income, 0) / recentSummaries.length
-      const avgExpenses = recentSummaries.reduce((s, m) => s + m.expenses, 0) / recentSummaries.length
-      const avgSavings = avgIncome - avgExpenses
-      const months = periodMonths[predictionPeriod]
-
-      const historicalData = recentSummaries.map(s =>
-        `${MONTHS_FULL[s.month - 1]} ${s.year}: Receitas ${s.income.toFixed(2)}€, Despesas ${s.expenses.toFixed(2)}€, Poupança ${s.balance.toFixed(2)}€`
-      ).join('\n')
-
-      const recurringList = recurringTransactions.length > 0
-        ? recurringTransactions.map(t => `${t.description}: ${t.amount.toFixed(2)}€ (${t.type === 'expense' ? 'despesa' : 'receita'} fixa)`).join('\n')
-        : 'Nenhuma despesa fixa registada'
-
-      const prompt = `És um consultor financeiro pessoal sénior especializado no mercado português. Tens 20 anos de experiência e conheces bem os custos de vida em Portugal — rendas, supermercados, transportes, lazer. Analisa os dados deste utilizador com pensamento crítico e profundidade real.
-
-CONTEXTO DO MERCADO PORTUGUÊS (usa como referência):
-- Salário mínimo nacional: 820€/mês
-- Salário médio em Portugal: ~1200€/mês
-- Renda média Lisboa: 800-1200€ | Porto: 600-900€ | Interior: 300-500€
-- Supermercado família: 200-400€/mês
-- Transportes: 40-150€/mês
-- Lazer razoável: 50-150€/mês
-
-DADOS FINANCEIROS DO UTILIZADOR:
-Histórico dos últimos ${recentSummaries.length} meses:
-${historicalData}
-
-Médias mensais:
-- Receita: ${avgIncome.toFixed(2)}€
-- Despesas totais: ${avgExpenses.toFixed(2)}€
-- Poupança: ${avgSavings.toFixed(2)}€
-- Taxa de poupança: ${avgIncome > 0 ? ((avgSavings / avgIncome) * 100).toFixed(1) : 0}%
-
-Despesas fixas registadas:
-${recurringList}
-Total fixo mensal: ${fixedExpenses.toFixed(2)}€
-Despesas variáveis estimadas: ${(avgExpenses - fixedExpenses).toFixed(2)}€/mês
-
-PERÍODO DE ANÁLISE: ${months} ${months === 1 ? 'mês' : 'meses'}
-
-INSTRUÇÕES CRÍTICAS:
-- NÃO faças observações óbvias como "gastar menos aumenta a poupança"
-- NÃO digas que 38€ em despesas fixas é baixo ou alto sem contexto — analisa a proporção face ao rendimento
-- Se a taxa de poupança for superior a 40%, reconhece que o utilizador já tem um excelente perfil financeiro
-- Os insights devem ter lógica financeira real — por exemplo, se as despesas variáveis são muito baixas, não faz sentido pedir para as reduzir
-- As recomendações devem ser ACIONÁVEIS e ESPECÍFICAS para Portugal — menciona produtos financeiros portugueses reais (PPR, certificados de aforro, fundos índice como o S&P500 através de corretoras como Degiro ou Trading212)
-- Se o utilizador já poupa muito, foca-te em como FAZER CRESCER essa poupança, não em como reduzir despesas
-- Usa valores reais dos dados para todos os cálculos
-
-Responde APENAS com JSON válido sem markdown:
-{
-  "profile": "poupador" ou "equilibrado" ou "gastador" ou "irregular",
-  "profile_label": "frase curta e honesta sobre o perfil financeiro em português, baseada na taxa de poupança real",
-  "summary": "análise honesta e profunda em 3-4 frases com valores reais. Menciona a taxa de poupança, compara com a média portuguesa, identifica o maior risco ou oportunidade real",
-  "monthly_savings_potential": valor_numerico_realista,
-  "predictions": [
-    {
-      "period": "1 mês",
-      "months": 1,
-      "predicted_expenses": valor,
-      "predicted_savings": valor,
-      "cumulative_savings": valor
-    },
-    {
-      "period": "${months} ${months === 1 ? 'mês' : 'meses'}",
-      "months": ${months},
-      "predicted_expenses": valor_total_periodo,
-      "predicted_savings": valor_mensal,
-      "cumulative_savings": valor_total_acumulado_periodo
-    }
-  ],
-  "insights": [
-    {
-      "title": "título específico e não óbvio",
-      "description": "insight com lógica financeira real, valores concretos, e comparação com benchmarks portugueses. Evita conclusões que qualquer pessoa já sabe.",
-      "impact": "alto" ou "médio" ou "baixo",
-      "saving": valor_numerico_mensal_realista
-    }
-  ],
-  "recommendations": [
-    "recomendação 1 específica para Portugal com produto financeiro real, valor concreto e prazo",
-    "recomendação 2 específica com ação concreta que o utilizador pode fazer esta semana",
-    "recomendação 3 de longo prazo com projeção de crescimento patrimonial"
-  ],
-  "warning": "aviso importante e específico se houver algo preocupante, senão null"
-}`
-
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${GROQ_API_KEY}`
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.4,
-          max_tokens: 1500,
-        })
-      })
-
-      const data = await response.json()
-      const rawText = data.choices[0].message.content.trim()
-      const cleaned = rawText.replace(/```json|```/g, '').trim()
-      setPrediction(JSON.parse(cleaned))
-    } catch {
-      setPredictionError('Erro ao gerar previsão. Tenta novamente.')
     } finally {
       setPredictionLoading(false)
     }

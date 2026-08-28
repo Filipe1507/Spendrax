@@ -4,6 +4,7 @@ from sqlalchemy import extract, func, case
 from typing import Optional, List
 from database import get_db
 from auth_utils import get_current_user
+from cache import cache_get, cache_set, invalidate_user
 import models, schemas
 
 router = APIRouter()
@@ -27,6 +28,13 @@ def monthly_summary(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    cache_key = f"user:{current_user.id}:summary:{year}-{month:02d}"
+
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached  # CACHE HIT — não toca no PostgreSQL
+
+    # CACHE MISS — vai à base de dados
     result = db.query(
         func.coalesce(func.sum(
             case((models.Transaction.type == 'income', models.Transaction.amount), else_=0)
@@ -44,7 +52,7 @@ def monthly_summary(
     income = float(result.income)
     expenses = float(result.expenses)
 
-    return {
+    payload = {
         "month": month,
         "year": year,
         "income": income,
@@ -53,6 +61,9 @@ def monthly_summary(
         "total_transactions": result.total
     }
 
+    cache_set(cache_key, payload)
+    return payload
+
 
 @router.get("/summary/range")
 def summary_range(
@@ -60,6 +71,13 @@ def summary_range(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    cache_key = f"user:{current_user.id}:range:{months}"
+
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached  # CACHE HIT
+
+    # CACHE MISS — query com GROUP BY sobre todo o histórico
     result = db.query(
         extract("month", models.Transaction.date).label("month"),
         extract("year", models.Transaction.date).label("year"),
@@ -79,7 +97,7 @@ def summary_range(
         extract("month", models.Transaction.date),
     ).all()
 
-    return [
+    payload = [
         {
             "month": int(r.month),
             "year": int(r.year),
@@ -89,6 +107,9 @@ def summary_range(
         }
         for r in result
     ]
+
+    cache_set(cache_key, payload)
+    return payload
 
 
 @router.get("/", response_model=List[schemas.TransactionOut])
@@ -124,6 +145,8 @@ def create_transaction(
     db.add(transaction)
     db.commit()
     db.refresh(transaction)
+
+    invalidate_user(current_user.id)  # dados mudaram — cache deste user fica obsoleta
     return transaction
 
 
@@ -145,6 +168,8 @@ def update_transaction(
         setattr(transaction, key, value)
     db.commit()
     db.refresh(transaction)
+
+    invalidate_user(current_user.id)
     return transaction
 
 
@@ -162,3 +187,5 @@ def delete_transaction(
         raise HTTPException(status_code=404, detail="Transação não encontrada")
     db.delete(transaction)
     db.commit()
+
+    invalidate_user(current_user.id)
