@@ -24,6 +24,7 @@ This started as a portfolio project and has since been used as a testbed for bac
 
 ![AI analysis](docs/ai-analysis-1.png)
 
+![AI recommendations](docs/ai-analysis-2.png)
 ---
 
 ## Tech Stack
