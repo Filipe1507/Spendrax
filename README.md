@@ -1,6 +1,6 @@
 # Spendrax
 
-![tests](https://github.com/Filipe1507/Spendrax/actions/workflows/tests.yml/badge.svg)
+[![tests](https://github.com/Filipe1507/Spendrax/actions/workflows/tests.yml/badge.svg)](https://github.com/Filipe1507/Spendrax/actions/workflows/tests.yml)
 
 A full-stack personal finance application built with FastAPI and React. Users track income and expenses, set budgets and savings goals, and enter transactions in plain language — an LLM parses the input and creates the right entries.
 
