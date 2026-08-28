@@ -5,3 +5,4 @@ __pycache__/
 backup_spendwise.sql
 *.sql
 docker-compose.txt
+.pytest_cache/

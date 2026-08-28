@@ -24,7 +24,7 @@ def cache_get(key: str):
 def cache_set(key: str, value, ttl: int = DEFAULT_TTL) -> None:
     """Guarda em cache com TTL. Falha em silêncio se o Redis estiver em baixo."""
     try:
-        redis_client.setex(key, ttl, json.dumps(value))
+        redis_client.set(key, json.dumps(value), ex=ttl)
     except Exception:
         pass
 
