@@ -1,4 +1,7 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum, Boolean
+from sqlalchemy import (
+    Column, Integer, String, Float, DateTime, ForeignKey, Enum, Boolean,
+    Index, text,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -36,6 +39,11 @@ class Category(Base):
     transactions = relationship("Transaction", back_populates="category")
     budgets = relationship("Budget", back_populates="category")
 
+    __table_args__ = (
+        # Todas as queries de categorias filtram por utilizador.
+        Index("idx_categories_user", "user_id"),
+    )
+
 
 class Transaction(Base):
     __tablename__ = "transactions"
@@ -52,7 +60,22 @@ class Transaction(Base):
 
     user = relationship("User", back_populates="transactions")
     category = relationship("Category", back_populates="transactions")
-    
+
+    __table_args__ = (
+        # Serve o padrão dominante: filtrar por utilizador e ordenar por data
+        # descendente. O DESC no índice evita um sort adicional na query.
+        Index("idx_transactions_user_date", "user_id", text("date DESC")),
+
+        # Índice parcial: só indexa as linhas recorrentes, que são uma
+        # pequena fração do total. Muito mais pequeno que um índice completo
+        # e serve inteiramente a rota /list/recurring.
+        Index(
+            "idx_transactions_recurring",
+            "user_id", "is_recurring",
+            postgresql_where=text("is_recurring = true"),
+        ),
+    )
+
 
 class Budget(Base):
     __tablename__ = "budgets"
@@ -67,6 +90,11 @@ class Budget(Base):
     user = relationship("User", back_populates="budgets")
     category = relationship("Category", back_populates="budgets")
 
+    __table_args__ = (
+        Index("idx_budgets_user_month", "user_id", "month", "year"),
+    )
+
+
 class SavingsGoal(Base):
     __tablename__ = "savings_goals"
 
@@ -80,3 +108,7 @@ class SavingsGoal(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="savings_goals")
+
+    __table_args__ = (
+        Index("idx_savings_user", "user_id"),
+    )

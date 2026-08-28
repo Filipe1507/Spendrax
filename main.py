@@ -5,8 +5,7 @@ import auth, transactions, categories, budgets, savings
 import auth, transactions, categories, budgets, savings, ai
 
 
-# Cria todas as tabelas na base de dados
-Base.metadata.create_all(bind=engine)
+# Esquema gerido pelo Alembic: correr `alembic upgrade head`
 
 app = FastAPI(
     title="SpendWise API",
